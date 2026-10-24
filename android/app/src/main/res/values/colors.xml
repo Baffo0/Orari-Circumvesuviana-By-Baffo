@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Blu linea e scuro del tabellone, gli stessi colori del sito. -->
+    <color name="line">#0A6BB3</color>
+    <color name="board">#1C2630</color>
+    <color name="ic_launcher_background">#0A6BB3</color>
+</resources>

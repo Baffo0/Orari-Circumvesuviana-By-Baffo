@@ -1,0 +1,87 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Su GitHub Actions ogni build ha un numero progressivo: lo usiamo come versionCode
+// così ogni APK nuovo si installa come aggiornamento di quello precedente.
+def buildNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int
+
+// Il sito (../index.html, lo stesso pubblicato su GitHub Pages) viene copiato qui a ogni
+// build e finisce negli asset dell'APK sotto www/.
+def webAssetsRoot = layout.buildDirectory.dir('generated/webassets').get().asFile
+def webAssetsWww = new File(webAssetsRoot, 'www')
+
+android {
+    namespace 'it.baffo.vesuora'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'it.baffo.vesuora'
+        minSdk 26
+        targetSdk 35
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+    }
+
+    signingConfigs {
+        // Chiave di PROVA salvata nel repository: serve solo perché ogni build della CI
+        // abbia la stessa firma e si installi sopra la precedente senza disinstallare.
+        // La chiave è pubblica: installare e aggiornare solo dal link ufficiale della release.
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir(webAssetsRoot)
+        }
+    }
+
+    lint {
+        // Le build di prova non devono fallire per avvisi di lint.
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    // appcompat porta kotlin-stdlib-jdk7/jdk8 1.6.x, core la kotlin-stdlib 1.8.x che le
+    // contiene già: il BOM allinea le versioni ed evita le classi duplicate.
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+}
+
+def syncWebAssets = tasks.register('syncWebAssets', Sync) {
+    group = 'build'
+    description = 'Copia il sito negli asset dell\'APK.'
+    from(rootProject.file('../index.html'))
+    into(webAssetsWww)
+}
+
+// Gli asset devono essere aggiornati prima che AGP li unisca nell'APK.
+tasks.configureEach { task ->
+    if (task.name == 'preBuild' || task.name ==~ /merge\w*Assets/ || task.name.toLowerCase().contains('lint')) {
+        task.dependsOn syncWebAssets
+    }
+}

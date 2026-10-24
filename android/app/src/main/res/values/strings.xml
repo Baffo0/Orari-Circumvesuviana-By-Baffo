@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VesuOra</string>
+    <string name="offline_title">Nessuna connessione</string>
+    <string name="offline_text">Il tabellone EAV non si è caricato. Controlla la connessione e trascina giù per riprovare.</string>
+    <string name="no_browser">Nessuna app per aprire questo link</string>
+</resources>
