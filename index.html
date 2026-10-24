@@ -174,36 +174,42 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--board); color: #fff; padding: 10px 16px; border-radius: 8px; z-index: 30; font-size: 15px; }
 @media (prefers-reduced-motion: no-preference) { .go, .icon-btn, .chip { transition: background .15s, color .15s; } }
 </style>
+<style>
+.lines { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; padding: 4px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.line-tab { border: 0; border-radius: 9px; padding: 10px 8px; cursor: pointer; background: none; color: var(--muted); font-family: var(--font-display); font-weight: 600; font-size: 17px; text-transform: uppercase; letter-spacing: .02em; line-height: 1.1; }
+.line-tab small { display: block; font-family: var(--font-body); font-weight: 500; font-size: 12px; text-transform: none; letter-spacing: 0; margin-top: 2px; }
+.line-tab[aria-selected="true"] { background: var(--line); color: #fff; }
+</style>
 </head>
 <body>
 <div class="wrap">
   <header class="board">
-    <div class="eyebrow"><span>Linea Napoli – Sorrento</span><span id="clock">--:--</span></div>
+    <div class="eyebrow"><span id="eyebrow">Circumvesuviana</span><span id="clock">--:--</span></div>
     <h1>Orari in tempo reale</h1>
-    <p>Tocca una fermata per aprire il tabellone partenze EAV di quella stazione.</p>
+    <p>Scegli la linea e tocca una fermata per aprire il tabellone partenze EAV di quella stazione.</p>
   </header>
+
+  <div class="lines" role="tablist" aria-label="Linea">
+    <button class="line-tab" role="tab" id="tab-sorrento" data-line="sorrento">Napoli – Sorrento<small>via Pompei Scavi</small></button>
+    <button class="line-tab" role="tab" id="tab-poggiomarino" data-line="poggiomarino">Napoli – Poggiomarino<small>via Scafati</small></button>
+  </div>
 
   <div class="tools">
     <div class="search">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="Cerca fermata (es. Vico, Ercolano)" autocomplete="off" aria-label="Cerca fermata">
+      <input id="q" type="search" placeholder="Cerca fermata (es. Vico, Scafati)" autocomplete="off" aria-label="Cerca fermata">
     </div>
-    <div class="chips" role="group" aria-label="Tratta">
-      <button class="chip" data-seg="all" aria-pressed="true">Tutte</button>
-      <button class="chip" data-seg="napoli">Napoli – Torre del Greco</button>
-      <button class="chip" data-seg="vesuvio">Torre – Castellammare</button>
-      <button class="chip" data-seg="penisola">Penisola sorrentina</button>
-    </div>
+    <div class="chips" id="chips" role="group" aria-label="Tratta"></div>
   </div>
 
-  <h2 class="section-title">Napoli Porta Nolana → Sorrento</h2>
+  <h2 class="section-title" id="lineTitle">Napoli Porta Nolana → Sorrento</h2>
   <ol class="line" id="line"></ol>
-  <p class="empty" id="empty" hidden>Nessuna fermata trovata.</p>
+  <p class="empty" id="empty" hidden>Nessuna fermata trovata su questa linea.</p>
 
   <div class="note">
     <div>I tabelloni sono quelli ufficiali EAV su <span class="tag">orariotreni.eavsrl.it</span>: partenze, binario e ritardo in tempo reale.</div>
     <div class="row">
-      <a class="btn" href="https://www.eavsrl.it/orari-linee-ferroviarie/" target="_blank" rel="noopener">Orario ufficiale L1</a>
+      <a class="btn" href="https://www.eavsrl.it/orari-linee-ferroviarie/" target="_blank" rel="noopener">Orari ufficiali EAV</a>
     </div>
   </div>
 </div>
@@ -212,7 +218,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 // Teleindicatori EAV: https://orariotreni.eavsrl.it/teleindicatori/?stazione=<id>
 // Versione di sola consultazione: i numeri stazione si cambiano solo qui nel codice.
 const EAV_BOARD = "https://orariotreni.eavsrl.it/teleindicatori/";
-const STOPS = [
+
+// Tratta in comune: Napoli Porta Nolana – Torre Annunziata Oplonti
+const TRUNK = [
   { key: "porta-nolana",       name: "Napoli Porta Nolana",          seg: "napoli",   id: 1,   major: true, alt: "napoli capolinea" },
   { key: "garibaldi",          name: "Napoli Piazza Garibaldi",      seg: "napoli",   id: 3, major: true, alt: "stazione centrale" },
   { key: "gianturco",          name: "Via Gianturco",                seg: "napoli",   id: 4 },
@@ -232,31 +240,72 @@ const STOPS = [
   { key: "leopardi",           name: "Leopardi",                     seg: "vesuvio",  id: 38 },
   { key: "trecase",            name: "Trecase",                      seg: "vesuvio",  id: 40 },
   { key: "oplonti",            name: "Torre Annunziata Oplonti",     seg: "vesuvio",  id: 41,   major: true },
-  { key: "villa-regina",       name: "Villa Regina",                 seg: "vesuvio",  id: 44 },
-  { key: "pompei-scavi",       name: "Pompei Scavi Villa dei Misteri", seg: "vesuvio", id: 49,   major: true },
-  { key: "moregine",           name: "Moregine",                     seg: "vesuvio",  id: 50 },
-  { key: "pioppaino",          name: "Pioppaino",                    seg: "vesuvio",  id: 51 },
-  { key: "stabia-scavi",       name: "Stabia Scavi (ex Via Nocera)",  seg: "vesuvio",  id: 52, alt: "via nocera castellammare" },
-  { key: "castellammare",      name: "Castellammare di Stabia",      seg: "vesuvio",  id: 53,   major: true },
+];
+
+const LINES = {
+  sorrento: {
+    title: "Napoli Porta Nolana → Sorrento",
+    segs: [["napoli", "Napoli – Torre del Greco"], ["vesuvio", "Torre – Castellammare"], ["penisola", "Penisola sorrentina"]],
+    stops: [...TRUNK,
+  { key: "villa-regina",       name: "Villa Regina",                 seg: "vesuvio",   id: 44 },
+  { key: "pompei-scavi",       name: "Pompei Scavi Villa dei Misteri", seg: "vesuvio",  id: 49,   major: true },
+  { key: "moregine",           name: "Moregine",                     seg: "vesuvio",   id: 50 },
+  { key: "pioppaino",          name: "Pioppaino",                    seg: "vesuvio",   id: 51 },
+  { key: "stabia-scavi",       name: "Stabia Scavi (ex Via Nocera)",  seg: "vesuvio",   id: 52, alt: "via nocera castellammare" },
+  { key: "castellammare",      name: "Castellammare di Stabia",      seg: "vesuvio",   id: 53,   major: true },
   { key: "vico-equense",       name: "Vico Equense",                 seg: "penisola", id: 57, major: true },
   { key: "seiano",             name: "Seiano",                       seg: "penisola", id: 58 },
   { key: "meta",               name: "Meta",                         seg: "penisola", id: 59 },
   { key: "piano",              name: "Piano di Sorrento",            seg: "penisola", id: 60 },
   { key: "santagnello",        name: "Sant'Agnello",                 seg: "penisola", id: 61 },
   { key: "sorrento",           name: "Sorrento",                     seg: "penisola", id: 62,   major: true, alt: "capolinea" },
-];
+    ],
+  },
+  poggiomarino: {
+    title: "Napoli Porta Nolana → Poggiomarino",
+    segs: [["napoli", "Napoli – Torre del Greco"], ["vesuvio", "Torre – Torre Annunziata"], ["valle", "Boscotrecase – Poggiomarino"]],
+    stops: [...TRUNK,
+  { key: "boscotrecase",       name: "Boscotrecase",                 seg: "valle",    id: 42,   major: true },
+  { key: "boscoreale",         name: "Boscoreale",                   seg: "valle",    id: 43 },
+  { key: "pompei-santuario",   name: "Pompei Santuario",             seg: "valle",    id: 45,   major: true },
+  { key: "scafati",            name: "Scafati",                      seg: "valle",    id: 46,   major: true },
+  { key: "san-pietro",         name: "San Pietro",                   seg: "valle",    id: 47 },
+  { key: "via-cangiani",       name: "Via Cangiani",                 seg: "valle",    id: 48 },
+  { key: "poggiomarino",       name: "Poggiomarino",                 seg: "valle",    id: 22,   major: true, alt: "capolinea" },
+    ],
+  },
+};
 
 const norm = t => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ");
 const $ = s => document.querySelector(s);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+const fromHash = location.hash.slice(1);
+let lineKey = LINES[fromHash] ? fromHash : (LINES[store.get("vesuviana.line")] ? store.get("vesuviana.line") : "sorrento");
 let seg = "all";
-try { seg = sessionStorage.getItem("vesuviana.seg") || "all"; } catch {}
+
+function renderChips() {
+  const chips = $("#chips");
+  chips.innerHTML = "";
+  [["all", "Tutte"], ...LINES[lineKey].segs].forEach(([k, label]) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.dataset.seg = k; b.textContent = label;
+    b.setAttribute("aria-pressed", String(k === seg));
+    b.addEventListener("click", () => { seg = k; renderChips(); render(); });
+    chips.appendChild(b);
+  });
+}
 
 function render() {
+  const L = LINES[lineKey];
   const q = norm($("#q").value.trim());
   const line = $("#line");
   line.innerHTML = "";
   let shown = 0;
-  STOPS.forEach(s => {
+  L.stops.forEach(s => {
     if ((seg !== "all" && s.seg !== seg) || (q && !norm(s.name + " " + (s.alt || "")).includes(q))) return;
     shown++;
     const li = document.createElement("li");
@@ -268,19 +317,27 @@ function render() {
     line.appendChild(li);
   });
   $("#empty").hidden = shown > 0;
-  document.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.seg === seg)));
+  $("#lineTitle").textContent = L.title;
+  $("#eyebrow").textContent = "Linea " + L.title.replace("Napoli Porta Nolana → ", "Napoli – ");
+  document.querySelectorAll(".line-tab").forEach(t => t.setAttribute("aria-selected", String(t.dataset.line === lineKey)));
 }
+
+function selectLine(k) {
+  lineKey = k; seg = "all";
+  store.set("vesuviana.line", k);
+  history.replaceState(null, "", "#" + k);
+  renderChips(); render();
+}
+
+document.querySelectorAll(".line-tab").forEach(t => t.addEventListener("click", () => selectLine(t.dataset.line)));
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (LINES[h] && h !== lineKey) selectLine(h); });
 $("#q").addEventListener("input", render);
-document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
-  seg = c.dataset.seg;
-  try { sessionStorage.setItem("vesuviana.seg", seg); } catch {}
-  render();
-}));
+
 function tick() {
   $("#clock").textContent = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
 }
 tick(); setInterval(tick, 15000);
-render();
+renderChips(); render();
 </script>
 </body>
 </html>
