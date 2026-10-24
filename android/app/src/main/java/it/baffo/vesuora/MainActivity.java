@@ -122,6 +122,15 @@ public class MainActivity extends AppCompatActivity {
         s.setSupportMultipleWindows(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
+        // I tabelloni EAV sono pensati per i monitor di stazione e non hanno il meta viewport:
+        // come fa Chrome, li impaginiamo larghi e li rimpiccioliamo per farli stare nello
+        // schermo, lasciando lo zoom con due dita. Il sito dell'elenco ha il suo viewport
+        // (width=device-width), quindi per lui non cambia niente.
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        s.setSupportZoom(true);
+        s.setBuiltInZoomControls(true);
+        s.setDisplayZoomControls(false);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
